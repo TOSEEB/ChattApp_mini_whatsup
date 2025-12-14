@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp-like Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        // Check localStorage immediately to prevent flash of login page
+        (function() {
+            const storedToken = localStorage.getItem('chat_token');
+            const storedUser = localStorage.getItem('chat_user');
+            
+            // If we have stored session, hide auth section immediately
+            if (storedToken && storedUser) {
+                document.addEventListener('DOMContentLoaded', function() {
+                    const authSection = document.getElementById('auth-section');
+                    const chatSection = document.getElementById('chat-section');
+                    if (authSection) authSection.style.display = 'none';
+                    if (chatSection) chatSection.style.display = 'flex';
+                });
+            } else {
+                // No stored session, show auth section
+                document.addEventListener('DOMContentLoaded', function() {
+                    const authSection = document.getElementById('auth-section');
+                    const chatSection = document.getElementById('chat-section');
+                    if (authSection) authSection.style.display = 'flex';
+                    if (chatSection) chatSection.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+</head>
+<body>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <div class="container">
+        <!-- Login/Register Section -->
+        <div id="auth-section" class="auth-section" style="display: none;">
+            <div class="auth-container">
+                <div class="logo">💬</div>
+                <h1>WhatsApp-like Chat</h1>
+                <div class="auth-tabs">
+                    <button class="tab-btn active" onclick="showLogin()">Login</button>
+                    <button class="tab-btn" onclick="showRegister()">Register</button>
+                </div>
+                
+                <!-- Login Form -->
+                <div id="login-form" class="auth-form">
+                    <input type="email" id="login-email" placeholder="Email" required onkeypress="if(event.key === 'Enter') login()">
+                    <input type="password" id="login-password" placeholder="Password" required onkeypress="if(event.key === 'Enter') login()">
+                    <button onclick="login()">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </div>
+                
+                <!-- Register Form -->
+                <div id="register-form" class="auth-form" style="display: none;">
+                    <input type="text" id="register-username" placeholder="Username" required onkeypress="if(event.key === 'Enter') register()">
+                    <input type="email" id="register-email" placeholder="Email" required onkeypress="if(event.key === 'Enter') register()">
+                    <input type="password" id="register-password" placeholder="Password (min 6 chars)" required onkeypress="if(event.key === 'Enter') register()">
+                    <button onclick="register()">Register</button>
+                    <div id="register-error" class="error-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat-section" class="chat-section" style="display: none;">
+            <div class="chat-container">
+                <!-- Sidebar - Conversation List -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <div class="user-avatar">
+                            <span id="user-avatar-text"></span>
+                        </div>
+                        <div class="user-name-display">
+                            <span id="current-user-name"></span>
+                        </div>
+                        <div class="header-actions">
+                            <button class="icon-btn" onclick="showSearchUsers()" title="New Chat">💬</button>
+                            <button class="icon-btn" onclick="openCreateRoomModal()" title="Create Group">👥</button>
+                            <button class="icon-btn" onclick="logout()" title="Logout">⚙️</button>
+                        </div>
+                    </div>
+                    
+                    <div class="sidebar-tabs">
+                        <button class="tab-btn active" onclick="switchTab('chats')" id="chats-tab">Chats</button>
+                        <button class="tab-btn" onclick="switchTab('rooms')" id="rooms-tab">Rooms</button>
+                    </div>
+                    
+                    <div class="search-container">
+                        <input type="text" id="search-conversations" placeholder="Search or start new chat" oninput="searchConversations()">
+                    </div>
+                    
+                    <div id="conversations-list" class="conversations-list"></div>
+                    <div id="rooms-list" class="conversations-list" style="display: none;"></div>
+                </div>
+                
+                <!-- Main Chat Area -->
+                <div class="chat-main">
+                    <div id="no-conversation-selected" class="no-conversation-selected">
+                        <div class="empty-state">
+                            <div class="empty-icon">💬</div>
+                            <h2>Welcome to Chat App!</h2>
+                            <p>Select a conversation from the list or start a new chat</p>
+                            <div style="margin-top: 20px;">
+                                <button onclick="showTutorial()" class="tutorial-trigger-btn" style="
+                                    background: #25d366;
+                                    color: white;
+                                    border: none;
+                                    padding: 10px 20px;
+                                    border-radius: 8px;
+                                    font-size: 14px;
+                                    font-weight: 600;
+                                    cursor: pointer;
+                                    transition: background 0.2s;
+                                ">📖 How to Use This App</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="chat-conversation" class="chat-conversation" style="display: none;">
+                        <div class="chat-header">
+                            <div class="chat-header-info">
+                                <div class="chat-avatar">
+                                    <span id="chat-avatar-text"></span>
+                                </div>
+                                <div class="chat-header-text">
+                                    <h3 id="chat-username"></h3>
+                                    <span id="chat-status" class="chat-status">online</span>
+                                </div>
+                            </div>
+                            <div class="chat-header-actions" id="chat-header-actions" style="display: none;">
+                                <button onclick="startVoiceCall()" class="icon-btn" title="Voice Call">📞</button>
+                                <button onclick="startVideoCall()" class="icon-btn" title="Video Call">📹</button>
+                                <button onclick="openRoomInfoModal()" class="icon-btn" title="See Members" id="room-info-btn">👥</button>
+                                <button onclick="openAddMembersModal()" class="icon-btn" title="Add Members" id="add-members-btn" style="display: none;">➕</button>
+                            </div>
+                        </div>
+                        
+                        <div id="messages-container" class="messages-container"></div>
+                        
+                        <div class="typing-indicator" id="typing-indicator"></div>
+                        
+                        <div class="message-input-container">
+                            <button onclick="toggleEmojiPicker()" class="emoji-btn" title="Emoji">😊</button>
+                            <input type="file" id="file-input" style="display: none;" onchange="handleFileSelect(event)" multiple>
+                            <button onclick="document.getElementById('file-input').click()" class="file-btn" title="Attach File">📎</button>
+                            <input type="checkbox" id="encrypt-checkbox" checked style="display: none;">
+                            <input 
+                                type="text" 
+                                id="message-input" 
+                                placeholder="Type a message..." 
+                                onkeypress="handleKeyPress(event)"
+                                oninput="handleTyping()"
+                            >
+                            <button onclick="sendMessage()" class="send-btn">➤</button>
+                        </div>
+                        <div id="emoji-picker" class="emoji-picker" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Users Modal -->
+    <div id="search-users-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>New Chat</h2>
+                <span class="close" onclick="closeSearchUsersModal()">&times;</span>
+            </div>
+            <div class="search-input-container">
+                <input type="text" id="search-users-input" placeholder="Search users by name or email..." oninput="searchUsers()">
+            </div>
+            <div id="search-users-results" class="search-results"></div>
+        </div>
+    </div>
+
+    <!-- Create Room Modal -->
+    <div id="create-room-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Group Room</h2>
+                <span class="close" onclick="closeCreateRoomModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="room-name-input" placeholder="Room name..." required>
+                <textarea id="room-description-input" placeholder="Description (optional)"></textarea>
+                <button onclick="createRoom()" class="create-btn">Create Room</button>
+                <div id="room-error" class="error-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Info Modal (Members List) -->
+    <div id="room-info-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="room-info-title">Room Info</h2>
+                <span class="close" onclick="closeRoomInfoModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="room-info-content">
+                    <div class="room-info-section">
+                        <h3 id="room-info-name"></h3>
+                        <p id="room-info-description"></p>
+                    </div>
+                    <div class="room-info-section">
+                        <h4>Members (<span id="room-info-member-count">0</span>)</h4>
+                        <div id="room-members-list" class="search-results"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Members to Room Modal -->
+    <div id="add-members-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Members to Room</h2>
+                <span class="close" onclick="closeAddMembersModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="search-input-container">
+                    <input type="text" id="search-members-input" placeholder="Search users..." oninput="filterMembers()">
+                </div>
+                <div id="all-users-list" class="search-results"></div>
+                <div id="add-members-error" class="error-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tutorial/Onboarding Modal -->
+    <div id="tutorial-modal" class="modal">
+        <div class="modal-content tutorial-modal-content">
+            <div class="tutorial-header">
+                <h2>Welcome to Chat App! 👋</h2>
+                <span class="close" onclick="closeTutorial()">&times;</span>
+            </div>
+            <div class="tutorial-body">
+                <div class="tutorial-step active" id="tutorial-step-1">
+                    <div class="tutorial-icon">💬</div>
+                    <h3>Start a New Chat</h3>
+                    <p>Click the <strong>💬 chat icon</strong> in the top right of the sidebar to search for users and start a conversation.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: You can search users by name or email</span>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" id="tutorial-step-2">
+                    <div class="tutorial-icon">👥</div>
+                    <h3>Create a Group</h3>
+                    <p>Click the <strong>👥 group icon</strong> to create a group room where multiple people can chat together.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: As group admin, you can add/remove members</span>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" id="tutorial-step-3">
+                    <div class="tutorial-icon">🔒</div>
+                    <h3>Messages are Encrypted</h3>
+                    <p>All your messages are <strong>automatically encrypted</strong> by default for maximum security. The <strong>🔒 lock icon</strong> shows encryption is active.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: Only you and the recipient can read encrypted messages</span>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" id="tutorial-step-4">
+                    <div class="tutorial-icon">📎</div>
+                    <h3>Share Files & Images</h3>
+                    <p>Click the <strong>📎 attachment icon</strong> to share files, images, and documents with others.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: Images are displayed inline, files can be downloaded</span>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" id="tutorial-step-5">
+                    <div class="tutorial-icon">✏️</div>
+                    <h3>Edit & Delete Messages</h3>
+                    <p>Hover over your messages to see <strong>✏️ edit</strong> and <strong>🗑️ delete</strong> options. You can edit messages within 15 minutes.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: Click ↩️ to reply to specific messages</span>
+                    </div>
+                </div>
+                
+                <div class="tutorial-step" id="tutorial-step-6">
+                    <div class="tutorial-icon">🔍</div>
+                    <h3>Search Messages</h3>
+                    <p>Use the <strong>search bar</strong> at the top to find conversations or messages containing specific words.</p>
+                    <div class="tutorial-highlight">
+                        <span>💡 Tip: Search works across all your chats and groups</span>
+                    </div>
+                </div>
+            </div>
+            <div class="tutorial-footer">
+                <div class="tutorial-progress">
+                    <span id="tutorial-current-step">1</span> / <span id="tutorial-total-steps">6</span>
+                </div>
+                <div class="tutorial-buttons">
+                    <button class="tutorial-btn tutorial-btn-secondary" onclick="previousTutorialStep()" id="tutorial-prev-btn" style="display: none;">← Previous</button>
+                    <button class="tutorial-btn tutorial-btn-primary" onclick="nextTutorialStep()" id="tutorial-next-btn">Next →</button>
+                    <button class="tutorial-btn tutorial-btn-primary" onclick="closeTutorial()" id="tutorial-skip-btn" style="display: none;">Got it! Let's start</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
