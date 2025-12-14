@@ -526,6 +526,87 @@ body {
     background: #06cf9f;
 }
 
+/* File Preview */
+.file-preview-container {
+    padding: 8px 16px;
+    background: #202c33;
+    border-top: 1px solid #2a3942;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: #2a3942;
+    border-radius: 8px;
+    position: relative;
+}
+
+.file-preview-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.file-preview-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.file-preview-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-preview-name {
+    color: #e9edef;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-preview-size {
+    color: #8696a0;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.file-preview-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #3d4a52;
+    color: #e9edef;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.file-preview-remove:hover {
+    background: #f15c6d;
+}
+
 /* Modal */
 .modal {
     display: none;

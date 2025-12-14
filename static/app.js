@@ -7,6 +7,7 @@ let conversations = [];
 let typingTimeout = null;
 let pendingMessages = new Map(); // Track pending optimistic messages by content
 let replyingToMessage = null; // Track message being replied to
+let pendingFiles = []; // Track files selected but not yet sent
 let messagePagination = {
     conversationId: null,
     roomId: null,
@@ -312,6 +313,7 @@ function logout() {
     clearStoredSession();
     
     currentConversation = null;
+    clearPendingFiles(); // Clear any pending files on logout
     if (websocket) {
         websocket.close();
         websocket = null;
@@ -460,6 +462,7 @@ async function openConversation(conversationId) {
     
     currentConversation = conv;
     currentRoom = null; // Clear room when opening conversation
+    clearPendingFiles(); // Clear any pending files when switching conversations
     renderConversations();
     
     // Update UI
@@ -964,7 +967,8 @@ async function sendMessage() {
     const input = document.getElementById('message-input');
     const content = input.value.trim();
     
-    if (!content) {
+    // Check if we have files to send or text content
+    if (!content && pendingFiles.length === 0) {
         return;
     }
     
@@ -972,58 +976,78 @@ async function sendMessage() {
     const encrypt = document.getElementById('encrypt-checkbox')?.checked !== false; // Default to true
     const replyToId = replyingToMessage ? replyingToMessage.id : null;
     
-    // If it's a room, use HTTP API
-    if (currentRoom) {
-        await sendRoomMessage(content, encrypt, replyToId);
+    // If there are pending files, upload them first
+    if (pendingFiles.length > 0) {
+        const filesToUpload = [...pendingFiles]; // Copy array
+        clearPendingFiles(); // Clear preview immediately
+        
+        for (let file of filesToUpload) {
+            await uploadFile(file);
+        }
+    }
+    
+    // If there's text content, send it
+    if (content) {
+        // If it's a room, use HTTP API
+        if (currentRoom) {
+            await sendRoomMessage(content, encrypt, replyToId);
+            input.value = '';
+            cancelReply();
+            return;
+        }
+        
+        // For conversations, use WebSocket
+        if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+            console.error('WebSocket is not connected');
+            showToast('Connection lost. Please refresh the page.', 'error', 5000);
+            return;
+        }
+        
+        // Track pending message by content (we'll replace it when server confirms)
+        const messageKey = `${content}-${currentUser.id}`;
+        
+        // Optimistically add message to UI immediately
+        // Use current local time for immediate display (will be replaced by server timestamp)
+        const now = new Date();
+        const tempMessage = {
+            id: `temp-${Date.now()}`, // Temporary ID with prefix
+            content: content,
+            sender_id: currentUser.id,
+            sender_username: currentUser.username,
+            status: 'sent',
+            reply_to_id: replyToId,
+            reply_to_content: replyingToMessage ? replyingToMessage.content : null,
+            reply_to_sender: replyingToMessage ? replyingToMessage.sender : null,
+            created_at: now.toISOString() // UTC timestamp - will be converted to local time in formatMessageTime
+        };
+        
+        const messageElement = addMessageToUI(tempMessage);
+        if (messageElement) {
+            pendingMessages.set(messageKey, messageElement);
+        }
+        
+        scrollToBottom();
+        
+        // Send to server via WebSocket
+        websocket.send(JSON.stringify({
+            type: 'message',
+            content: content,
+            encrypt: encrypt,
+            message_type: 'text',
+            reply_to_id: replyToId
+        }));
+        
         input.value = '';
         cancelReply();
-        return;
+        clearTypingIndicator();
     }
-    
-    // For conversations, use WebSocket
-    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-        console.error('WebSocket is not connected');
-        showToast('Connection lost. Please refresh the page.', 'error', 5000);
-        return;
+}
+
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
     }
-    
-    // Track pending message by content (we'll replace it when server confirms)
-    const messageKey = `${content}-${currentUser.id}`;
-    
-    // Optimistically add message to UI immediately
-    // Use current local time for immediate display (will be replaced by server timestamp)
-    const now = new Date();
-    const tempMessage = {
-        id: `temp-${Date.now()}`, // Temporary ID with prefix
-        content: content,
-        sender_id: currentUser.id,
-        sender_username: currentUser.username,
-        status: 'sent',
-        reply_to_id: replyToId,
-        reply_to_content: replyingToMessage ? replyingToMessage.content : null,
-        reply_to_sender: replyingToMessage ? replyingToMessage.sender : null,
-        created_at: now.toISOString() // UTC timestamp - will be converted to local time in formatMessageTime
-    };
-    
-    const messageElement = addMessageToUI(tempMessage);
-    if (messageElement) {
-        pendingMessages.set(messageKey, messageElement);
-    }
-    
-    scrollToBottom();
-    
-    // Send to server via WebSocket
-    websocket.send(JSON.stringify({
-        type: 'message',
-        content: content,
-        encrypt: encrypt,
-        message_type: 'text',
-        reply_to_id: replyToId
-    }));
-    
-    input.value = '';
-    cancelReply();
-    clearTypingIndicator();
 }
 
 async function sendRoomMessage(content, encrypt, replyToId = null) {
@@ -1525,21 +1549,100 @@ document.addEventListener('click', (e) => {
 });
 
 // File upload
-async function handleFileSelect(event) {
+function handleFileSelect(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     
     if (!currentConversation && !currentRoom) {
         showToast('Please select a conversation or room first.', 'warning');
+        event.target.value = '';
         return;
     }
     
-    for (let file of files) {
-        await uploadFile(file);
+    // Add files to pending files list
+    for (let file of Array.from(files)) {
+        pendingFiles.push(file);
     }
     
-    // Reset input
+    // Show preview
+    showFilePreview();
+    
+    // Reset input to allow selecting same file again
     event.target.value = '';
+}
+
+function showFilePreview() {
+    const container = document.getElementById('file-preview-container');
+    if (!container) return;
+    
+    if (pendingFiles.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.innerHTML = '';
+    container.style.display = 'block';
+    
+    pendingFiles.forEach((file, index) => {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'file-preview-item';
+        
+        const fileIcon = getFileIcon(file);
+        const fileSize = formatFileSize(file.size);
+        
+        previewItem.innerHTML = `
+            <div class="file-preview-icon">${fileIcon}</div>
+            <div class="file-preview-info">
+                <div class="file-preview-name">${file.name}</div>
+                <div class="file-preview-size">${fileSize}</div>
+            </div>
+            <button class="file-preview-remove" onclick="removePendingFile(${index})" title="Remove">×</button>
+        `;
+        
+        // Show image preview if it's an image
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imgPreview = document.createElement('img');
+                imgPreview.src = e.target.result;
+                imgPreview.className = 'file-preview-image';
+                previewItem.querySelector('.file-preview-icon').innerHTML = '';
+                previewItem.querySelector('.file-preview-icon').appendChild(imgPreview);
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        container.appendChild(previewItem);
+    });
+}
+
+function getFileIcon(file) {
+    if (file.type.startsWith('image/')) return '🖼️';
+    if (file.type.startsWith('video/')) return '🎥';
+    if (file.type.startsWith('audio/')) return '🎵';
+    if (file.type.includes('pdf')) return '📄';
+    if (file.type.includes('word') || file.name.endsWith('.doc') || file.name.endsWith('.docx')) return '📝';
+    if (file.type.includes('excel') || file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) return '📊';
+    if (file.type.includes('zip') || file.type.includes('rar')) return '📦';
+    return '📎';
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function removePendingFile(index) {
+    pendingFiles.splice(index, 1);
+    showFilePreview();
+}
+
+function clearPendingFiles() {
+    pendingFiles = [];
+    showFilePreview();
 }
 
 async function uploadFile(file) {
@@ -1707,6 +1810,7 @@ async function openRoom(roomId) {
     
     currentRoom = room;
     currentConversation = null;
+    clearPendingFiles(); // Clear any pending files when switching rooms
     renderRooms();
     
     document.getElementById('no-conversation-selected').style.display = 'none';
