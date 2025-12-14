@@ -233,6 +233,40 @@ The application is fully responsive and works on:
 - 💻 Desktop browsers
 - 🖥️ Large screens
 
+## 🚀 Deployment
+
+### Database Configuration
+
+The application supports both SQLite (for local development) and PostgreSQL (for production).
+
+#### Local Development (SQLite)
+By default, the app uses SQLite which stores data in `chat.db` file:
+```bash
+# No configuration needed - works out of the box
+python run.py
+```
+
+#### Production Deployment (PostgreSQL)
+
+For production deployments (Render, Heroku, Railway, etc.), you need to use PostgreSQL for data persistence:
+
+1. **Create a PostgreSQL database** on your hosting platform
+2. **Set the DATABASE_URL environment variable**:
+   ```bash
+   DATABASE_URL=postgresql://username:password@host:port/database_name
+   ```
+
+3. **On Render.com**:
+   - The `render.yaml` file is already configured with a PostgreSQL database service
+   - Render automatically provides the `DATABASE_URL` when you deploy
+   - The database will persist data across deployments and restarts
+
+4. **Database Migration**:
+   - Tables are automatically created on first startup via `init_db()`
+   - No manual migration needed - the app handles schema creation
+
+**Important**: SQLite files are ephemeral in cloud deployments and will be lost on restarts. Always use PostgreSQL for production!
+
 ## 🚀 Performance
 
 - **Optimistic UI Updates**: Instant message display

@@ -1,19 +1,41 @@
 """
 Database configuration and session management
+Supports both SQLite (for local development) and PostgreSQL (for production)
 """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+from urllib.parse import urlparse
 
-# Database URL - SQLite for simplicity, can be easily changed to PostgreSQL
+# Database URL - Supports both SQLite and PostgreSQL
+# For production (Render, Heroku, etc.), set DATABASE_URL environment variable
+# Example PostgreSQL: postgresql://user:password@host:port/dbname
+# Example SQLite: sqlite:///./chat.db
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./chat.db")
 
-# Create engine
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
+# Parse database URL to determine type
+parsed_url = urlparse(DATABASE_URL)
+is_sqlite = parsed_url.scheme == "sqlite" or "sqlite" in DATABASE_URL.lower()
+
+# Create engine with appropriate configuration
+if is_sqlite:
+    # SQLite configuration (for local development)
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False
+    )
+else:
+    # PostgreSQL configuration (for production)
+    # Use connection pooling for better performance
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,  # Verify connections before using them
+        echo=False
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -1,4 +1,13 @@
 services:
+  # PostgreSQL Database - Persistent storage for production
+  # This database will persist all your chat data, users, messages, etc.
+  - type: pg
+    name: chat-database
+    plan: free  # Change to 'starter' or higher for production workloads
+    databaseName: chatdb
+    user: chatuser
+
+  # Web Application
   - type: web
     name: chat-application
     env: python
@@ -7,7 +16,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.0
+      # Link to PostgreSQL database - DATABASE_URL will be automatically set
       - key: DATABASE_URL
-        value: sqlite:///./chat.db
+        fromDatabase:
+          name: chat-database
+          property: connectionString
     healthCheckPath: /
 
