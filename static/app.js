@@ -17,7 +17,10 @@ let messagePagination = {
     loading: false
 };
 
-const API_BASE = window.location.origin;
+// Detect if we're on Vercel and use Render backend, otherwise use same origin
+const API_BASE = (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.app'))
+    ? 'https://chattapp-mini-whatsup.onrender.com'  // Render backend URL
+    : window.location.origin;  // Same origin for local/Render deployment
 
 // Toast Notification System
 function showToast(message, type = 'info', duration = 4000) {
@@ -583,8 +586,13 @@ function connectWebSocket(conversationId) {
     
     currentWebSocketConversationId = conversationId;
     
+    // Use Render backend for WebSocket if on Vercel, otherwise use same origin
+    const wsHost = (window.location.hostname.includes('vercel.app'))
+        ? 'chattapp-mini-whatsup.onrender.com'  // Render backend
+        : window.location.host;  // Same origin
+    
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/conversation/${conversationId}?token=${currentToken}`;
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/conversation/${conversationId}?token=${currentToken}`;
     
     websocket = new WebSocket(wsUrl);
     
