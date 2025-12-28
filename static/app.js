@@ -69,7 +69,7 @@ function loadStoredSession() {
             // Verify token is still valid by fetching user info
             verifyAndRestoreSession();
         } catch (error) {
-            console.error('Error loading stored session:', error);
+            // Error loading stored session
             clearStoredSession();
             showAuthSection();
         }
@@ -126,7 +126,7 @@ async function verifyAndRestoreSession() {
             showAuthSection();
         }
     } catch (error) {
-        console.error('Error verifying session:', error);
+        // Error verifying session
         clearStoredSession();
         showAuthSection();
     }
@@ -163,7 +163,7 @@ function showAuthSection() {
             const authSection = document.getElementById('auth-section');
             if (authSection) authSection.style.display = 'none';
         } catch (e) {
-            console.error('Error loading session:', e);
+            // Error loading session
         }
     } else {
         // No session, show auth section
@@ -341,7 +341,7 @@ async function loadConversations() {
         conversations = await response.json();
         renderConversations();
     } catch (error) {
-        console.error('Error loading conversations:', error);
+        // Error loading conversations
     }
 }
 
@@ -540,7 +540,7 @@ async function loadMessages(conversationId, skip = 0, limit = 50, append = false
             loadMoreIndicator.style.display = messagePagination.hasMore ? 'block' : 'none';
         }
     } catch (error) {
-        console.error('Error loading messages:', error);
+        // Error loading messages
         messagePagination.loading = false;
     }
 }
@@ -561,11 +561,27 @@ function setupInfiniteScroll() {
     });
 }
 
+let currentWebSocketConversationId = null;
+
 function connectWebSocket(conversationId) {
     if (!currentToken) {
-        console.error('No authentication token available');
         return;
     }
+    
+    // Don't reconnect if already connected to the same conversation
+    if (websocket && 
+        websocket.readyState === WebSocket.OPEN && 
+        currentWebSocketConversationId === conversationId) {
+        return;
+    }
+    
+    // Close existing connection if connecting to a different conversation
+    if (websocket && websocket.readyState !== WebSocket.CLOSED) {
+        websocket.close();
+        websocket = null;
+    }
+    
+    currentWebSocketConversationId = conversationId;
     
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/conversation/${conversationId}?token=${currentToken}`;
@@ -573,7 +589,7 @@ function connectWebSocket(conversationId) {
     websocket = new WebSocket(wsUrl);
     
     websocket.onopen = () => {
-        console.log('WebSocket connected');
+        // WebSocket connected successfully
     };
     
     websocket.onmessage = (event) => {
@@ -581,21 +597,22 @@ function connectWebSocket(conversationId) {
             const data = JSON.parse(event.data);
             handleWebSocketMessage(data);
         } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
+            // Silently handle parsing errors
         }
     };
     
-    websocket.onerror = (error) => {
-        console.error('WebSocket error:', error);
+    websocket.onerror = () => {
+        // WebSocket error - connection will be handled by onclose
     };
     
     websocket.onclose = (event) => {
-        console.log('WebSocket disconnected', event.code, event.reason);
+        currentWebSocketConversationId = null;
+        // Code 1005 = No Status Received (normal closure - browser/tab closed)
+        // Code 1008 = Policy Violation (token expired/invalid)
         if (event.code === 1008) {
-            // Policy violation - token expired or invalid
-            console.error('WebSocket connection rejected: Token expired or invalid. Please refresh the page and login again.');
             showToast('Your session has expired. Please refresh the page and login again.', 'error', 6000);
         }
+        // Don't reconnect automatically - let user action trigger reconnection
     };
 }
 
@@ -779,7 +796,56 @@ function addMessageToUI(message, isRoomMessage = false, prepend = false) {
     
     // Handle different message types
     if (message.message_type === 'file' || message.message_type === 'image') {
-        if (message.file_path) {
+        // Check if file is uploading
+        if (message.is_uploading || message.status === 'uploading') {
+            // Show loading state
+            const loadingContainer = document.createElement('div');
+            loadingContainer.className = 'file-upload-container';
+            
+            if (message.message_type === 'image') {
+                // For images, show preview with loading overlay
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'image-upload-container';
+                
+                // Create image preview from file if available
+                const img = document.createElement('div');
+                img.className = 'image-upload-preview';
+                img.style.background = '#2a3942';
+                img.style.minHeight = '200px';
+                img.style.borderRadius = '8px';
+                img.style.display = 'flex';
+                img.style.alignItems = 'center';
+                img.style.justifyContent = 'center';
+                img.style.position = 'relative';
+                
+                const loadingOverlay = document.createElement('div');
+                loadingOverlay.className = 'upload-loading-overlay';
+                loadingOverlay.innerHTML = `
+                    <div class="upload-spinner"></div>
+                    <div class="upload-text">Uploading...</div>
+                `;
+                
+                img.appendChild(loadingOverlay);
+                imgContainer.appendChild(img);
+                loadingContainer.appendChild(imgContainer);
+            } else {
+                // For files, show file info with loading spinner
+                const fileInfo = document.createElement('div');
+                fileInfo.className = 'file-upload-info';
+                fileInfo.innerHTML = `
+                    <div class="file-upload-icon">📎</div>
+                    <div class="file-upload-details">
+                        <div class="file-upload-name">${escapeHtml(message.file_name || 'File')}</div>
+                        <div class="file-upload-size">${formatFileSize(message.file_size || 0)}</div>
+                    </div>
+                    <div class="upload-spinner"></div>
+                `;
+                loadingContainer.appendChild(fileInfo);
+            }
+            
+            content.appendChild(loadingContainer);
+        } else if (message.file_path) {
+            // File is uploaded, show normal file display
             // Get token from currentToken or localStorage
             const token = currentToken || localStorage.getItem('chat_token') || '';
             // Append token to file URL for authentication
@@ -799,7 +865,7 @@ function addMessageToUI(message, isRoomMessage = false, prepend = false) {
                 img.loading = 'lazy';
                 // Handle image load errors
                 img.onerror = function() {
-                    console.error('Failed to load image:', fileUrl);
+                    // Failed to load image
                     this.style.display = 'none';
                     const errorText = document.createElement('span');
                     errorText.textContent = '📎 ' + (message.file_name || 'Image') + ' (Click to download)';
@@ -998,7 +1064,7 @@ async function sendMessage() {
         
         // For conversations, use WebSocket
         if (!websocket || websocket.readyState !== WebSocket.OPEN) {
-            console.error('WebSocket is not connected');
+            // WebSocket is not connected
             showToast('Connection lost. Please refresh the page.', 'error', 5000);
             return;
         }
@@ -1086,7 +1152,7 @@ async function sendRoomMessage(content, encrypt, replyToId = null) {
         // Reload rooms list to update last message
         await loadRooms();
     } catch (error) {
-        console.error('Error sending room message:', error);
+        // Error sending room message
         showToast('Failed to send message. Please try again.', 'error');
     }
 }
@@ -1210,7 +1276,7 @@ async function searchConversations() {
             }
             
         } catch (error) {
-            console.error('Error searching messages:', error);
+            // Error searching messages
             showToast('Search failed. Using name-based search.', 'warning');
             // Fallback to name-based search
             const queryLower = query.toLowerCase();
@@ -1264,7 +1330,7 @@ async function showSearchUsers() {
         allUsersList = await response.json();
         renderAllUsersInModal(allUsersList);
     } catch (error) {
-        console.error('Error loading users:', error);
+        // Error loading users
         resultsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #8696a0;">Failed to load users. Please try again.</div>';
     }
 }
@@ -1344,7 +1410,7 @@ async function startConversation(userId) {
         await loadConversations();
         await openConversation(conversation.id);
     } catch (error) {
-        console.error('Error starting conversation:', error);
+        // Error starting conversation
         showToast('Failed to start conversation. Please try again.', 'error');
     }
 }
@@ -1428,13 +1494,13 @@ function formatMessageTime(dateString) {
             date = new Date(dateString);
         }
     } catch (e) {
-        console.error('Error parsing date:', dateString, e);
+            // Error parsing date
         return '';
     }
     
     // Check if date is valid
     if (isNaN(date.getTime())) {
-        console.error('Invalid date:', dateString);
+        // Invalid date
         return '';
     }
     
@@ -1645,6 +1711,8 @@ function clearPendingFiles() {
     showFilePreview();
 }
 
+let uploadingFiles = new Map(); // Track uploading files: fileId -> messageElement
+
 async function uploadFile(file) {
     // Get token from currentToken or localStorage
     const token = currentToken || localStorage.getItem('chat_token');
@@ -1652,6 +1720,47 @@ async function uploadFile(file) {
         showToast('You must be logged in to upload files.', 'warning');
         return;
     }
+    
+    // Create optimistic message with loading indicator
+    const fileId = `upload-${Date.now()}-${Math.random()}`;
+    const isImage = file.type.startsWith('image/');
+    const now = new Date();
+    
+    const optimisticMessage = {
+        id: fileId,
+        content: isImage ? '📷 Photo' : `📎 ${file.name}`,
+        sender_id: currentUser.id,
+        sender_username: currentUser.username,
+        status: 'uploading',
+        message_type: isImage ? 'image' : 'file',
+        file_name: file.name,
+        file_size: file.size,
+        file_path: null, // Will be set after upload
+        created_at: now.toISOString(),
+        is_uploading: true,
+        uploadFile: file // Store file object for preview
+    };
+    
+    // Add optimistic message to UI
+    const messageElement = addMessageToUI(optimisticMessage, !!currentRoom);
+    if (messageElement) {
+        uploadingFiles.set(fileId, messageElement);
+        
+        // If it's an image, show preview
+        if (isImage) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const imgPreview = messageElement.querySelector('.image-upload-preview');
+                if (imgPreview) {
+                    imgPreview.style.backgroundImage = `url(${e.target.result})`;
+                    imgPreview.style.backgroundSize = 'cover';
+                    imgPreview.style.backgroundPosition = 'center';
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    scrollToBottom();
     
     const formData = new FormData();
     formData.append('file', file);
@@ -1682,7 +1791,16 @@ async function uploadFile(file) {
         
         const data = await response.json();
         
-        // Reload messages to show the file message
+        // Remove optimistic message
+        if (uploadingFiles.has(fileId)) {
+            const optimisticElement = uploadingFiles.get(fileId);
+            if (optimisticElement && optimisticElement.parentNode) {
+                optimisticElement.remove();
+            }
+            uploadingFiles.delete(fileId);
+        }
+        
+        // Reload messages to show the actual file message
         if (currentConversation) {
             await loadMessages(currentConversation.id);
         } else if (currentRoom) {
@@ -1695,8 +1813,17 @@ async function uploadFile(file) {
         } else {
             await loadRooms();
         }
+        
+        scrollToBottom();
     } catch (error) {
-        console.error('Error uploading file:', error);
+        // Remove optimistic message on error
+        if (uploadingFiles.has(fileId)) {
+            const optimisticElement = uploadingFiles.get(fileId);
+            if (optimisticElement && optimisticElement.parentNode) {
+                optimisticElement.remove();
+            }
+            uploadingFiles.delete(fileId);
+        }
         showToast('Failed to upload file. Please try again.', 'error');
     }
 }
@@ -1734,7 +1861,7 @@ async function loadRooms() {
         rooms = await response.json();
         renderRooms();
     } catch (error) {
-        console.error('Error loading rooms:', error);
+        // Error loading rooms
     }
 }
 
@@ -1915,7 +2042,7 @@ async function loadRoomMessages(roomId) {
             }
         }
     } catch (error) {
-        console.error('Error loading room messages:', error);
+        // Error loading room messages
         // Only show alert on initial load, not on polling errors
         const container = document.getElementById('messages-container');
         if (container && container.children.length === 0) {
@@ -2065,7 +2192,7 @@ async function loadRoomMembersForInfo() {
             container.appendChild(memberDiv);
         });
     } catch (error) {
-        console.error('Error loading room members:', error);
+        // Error loading room members
     }
 }
 
@@ -2091,7 +2218,7 @@ async function removeMemberFromRoom(userId) {
         // Reload rooms to update member count
         await loadRooms();
     } catch (error) {
-        console.error('Error removing member:', error);
+        // Error removing member
         showToast('Failed to remove member. Please try again.', 'error');
     }
 }
@@ -2130,7 +2257,7 @@ async function loadAllUsers() {
         allUsers = await response.json();
         renderAllUsers();
     } catch (error) {
-        console.error('Error loading users:', error);
+        // Error loading users
         document.getElementById('add-members-error').textContent = 'Failed to load users';
     }
 }
@@ -2151,7 +2278,7 @@ async function loadRoomMembers() {
         roomMembers = await response.json();
         renderAllUsers(); // Re-render to update member status
     } catch (error) {
-        console.error('Error loading room members:', error);
+        // Error loading room members
     }
 }
 
@@ -2264,7 +2391,7 @@ async function addMemberToRoom(userId) {
             showToast(`${user.username} has been added to the room!`, 'success');
         }
     } catch (error) {
-        console.error('Error adding member:', error);
+        // Error adding member
         document.getElementById('add-members-error').textContent = error.message;
     }
 }
@@ -2394,7 +2521,7 @@ async function editMessage(messageId) {
         message.setAttribute('data-message-id', updatedMessage.id);
         
     } catch (error) {
-        console.error('Error editing message:', error);
+        // Error editing message
         showToast('Failed to edit message. Please try again.', 'error');
     }
 }
@@ -2433,7 +2560,7 @@ async function deleteMessage(messageId) {
         }
         
     } catch (error) {
-        console.error('Error deleting message:', error);
+        // Error deleting message
         showToast('Failed to delete message. Please try again.', 'error');
     }
 }

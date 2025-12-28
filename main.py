@@ -55,6 +55,13 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Favicon endpoint to prevent 404 errors
+@app.get("/favicon.ico")
+async def favicon():
+    """Return empty favicon to prevent 404 errors"""
+    from fastapi.responses import Response
+    return Response(content=b"", media_type="image/x-icon")
+
 # Root endpoint - serve frontend
 @app.get("/")
 async def read_root():

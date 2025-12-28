@@ -607,6 +607,102 @@ body {
     background: #f15c6d;
 }
 
+/* File Upload Loading Indicator */
+.file-upload-container {
+    position: relative;
+    min-width: 200px;
+}
+
+.image-upload-container {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.image-upload-preview {
+    position: relative;
+    min-height: 200px;
+    background: #2a3942;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 1;
+}
+
+.upload-text {
+    color: #e9edef;
+    font-size: 13px;
+    margin-top: 8px;
+    font-weight: 500;
+}
+
+.file-upload-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #2a3942;
+    border-radius: 8px;
+    min-width: 200px;
+}
+
+.file-upload-icon {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.file-upload-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-upload-name {
+    color: #e9edef;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-upload-size {
+    color: #8696a0;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+/* Upload Spinner */
+.upload-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #00a884;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Modal */
 .modal {
     display: none;
